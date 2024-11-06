@@ -49,8 +49,42 @@ curl -L "$DOWNLOAD_URL" -o "$OUTPUT_FILE"
 # Check if the download was successful
 if [ $? -eq 0 ]; then
   echo "Download completed successfully. Saved to $OUTPUT_FILE"
-  # Optionally, make the file executable
+  # make the file executable
   chmod +x "$OUTPUT_FILE"
 else
   echo "Download failed."
 fi
+
+
+# Install and setup MySQL 
+# Update package list
+echo "Updating package list..."
+sudo apt-get update -y
+
+# Install MySQL Server
+echo "Installing MySQL Server..."
+sudo apt-get install mysql-server -y
+
+# Enable MySQL to start on boot
+echo "Enabling MySQL to start on boot..."
+sudo systemctl enable mysql
+
+# Start MySQL service
+echo "Starting MySQL service..."
+sudo systemctl start mysql
+
+# Wait for MySQL to initialize
+sleep 5
+
+# Set up MySQL root password and create a new database
+echo "Setting up MySQL database..."
+MYSQL_ROOT_PASSWORD="your_root_password"  # Change this to a secure password
+MYSQL_DATABASE="your_database_name"       # Change to your desired database name
+
+# Run the SQL commands to set up the database
+sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE};"
+sudo mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MYSQL_ROOT_PASSWORD}';"
+sudo mysql -u root -e "FLUSH PRIVILEGES;"
+
+# Show success message
+echo "MySQL installed and database '${MYSQL_DATABASE}' created successfully!"

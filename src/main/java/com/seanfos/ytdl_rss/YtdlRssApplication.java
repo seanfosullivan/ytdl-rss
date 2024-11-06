@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class YtdlRssApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(YtdlRssApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(YtdlRssApplication.class, args);
+    }
 
 }

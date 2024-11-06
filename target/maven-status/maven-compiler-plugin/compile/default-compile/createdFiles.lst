@@ -3,6 +3,7 @@ com/seanfos/ytdl_rss/model/Video.class
 com/seanfos/ytdl_rss/YtdlRssApplication.class
 com/seanfos/ytdl_rss/controller/YoutubeRssController.class
 com/seanfos/ytdl_rss/config/AppConfig.class
+com/seanfos/ytdl_rss/service/FileDeletionService.class
 com/seanfos/ytdl_rss/service/RssFeedService.class
 com/seanfos/ytdl_rss/service/YouTubeService.class
 com/seanfos/ytdl_rss/service/RssFeedServiceImpl.class

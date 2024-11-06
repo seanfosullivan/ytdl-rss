@@ -1,2 +1,4 @@
-target/classes/application.properties
+src/main/resources/application.properties
+target/
+.vscode/extensions.json
 src/main/resources/application.properties
