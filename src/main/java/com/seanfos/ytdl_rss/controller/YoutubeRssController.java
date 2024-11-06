@@ -19,20 +19,69 @@ public class YoutubeRssController {
     public YoutubeRssController(YouTubeServiceImpl youTubeService) {
         this.youTubeService = youTubeService;
     }
+    @GetMapping(value = "/video")
+    public String downloadVideo(@RequestParam String videoId) {
+        try {
+            Video video = youTubeService.getVideoData(videoId);
+            youTubeService.ytdlpDownloader(video);
+            return video.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "<error>Unable to download video</error>";
+        }
+    }
 
-    @GetMapping(value = "/rss")
-    public String getRssFeed(@RequestParam String playlistId) {
+    @GetMapping(value = "/playlist")
+    public String downloadPlaylistVideos(@RequestParam String playlistId) {
         try {
             List<Video> videos = youTubeService.getPlaylistVideos(playlistId);
             StringBuilder titles = new StringBuilder();
             for (Video v : videos){
-                titles.append(v.getTitle());
-                titles.append(" ");
+                titles.append("[");
+                titles.append(v.getLink());
+                titles.append("],");
+                youTubeService.ytdlpDownloader(v);
             }
             return titles.toString();
         } catch (Exception e) {
             e.printStackTrace();
-            return "<error>Unable to generate RSS feed</error>";
+            return "<error>Unable to download videos</error>";
         }
     }
+
+    @GetMapping(value = "/channel")
+    public String downloadChannelVideos(@RequestParam String channelName) {
+        try {
+            List<Video> videos = youTubeService.getChannelVideos(channelName);
+            StringBuilder titles = new StringBuilder();
+            
+            // Limit to 10 videos
+            int maxVideos = 10;
+            int videoCount = 0;
+    
+            for (Video v : videos) {
+                // Stop if we've processed 10 videos
+                if (videoCount >= maxVideos) {
+                    break;
+                }
+    
+                titles.append("[");
+                titles.append(v.getLink());
+                titles.append("],");
+    
+                // Call the downloader method
+                youTubeService.ytdlpDownloader(v);
+                
+                // Increment video counter
+                videoCount++;
+            }
+    
+            return titles.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "<error>Unable to download videos</error>";
+        }
+    }
+    
+
 }
