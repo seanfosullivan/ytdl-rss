@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 
 import org.json.JSONObject;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONTokener;
 
 import java.io.BufferedReader;
@@ -22,8 +23,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.springframework.scheduling.annotation.Scheduled;
-import java.nio.file.Path;
 import java.util.stream.Collectors;
 import org.springframework.web.client.HttpClientErrorException;
 
@@ -62,8 +61,9 @@ public class YouTubeServiceImpl implements YouTubeService{
         String response = restTemplate.getForObject(url, String.class);
 
         List<Video> videos = new ArrayList<>();
+        JSONObject jsonResponse = null;
         if (response != null) {
-            JSONObject jsonResponse = new JSONObject(response);
+            jsonResponse = new JSONObject(response);
             JSONArray items = jsonResponse.getJSONArray("items");
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i).getJSONObject("snippet");
@@ -76,7 +76,7 @@ public class YouTubeServiceImpl implements YouTubeService{
                 videos.add(video);
             }
         }
-        savePlaylistToFile(new Playlist(playlistId, videos), Paths.get("src", "main", "resources", "data", "playlist.json").toString());
+        savePlaylistToFile(new Playlist(playlistId, jsonResponse.getString("title"), videos), Paths.get("src", "main", "resources", "data", "playlist.json").toString());
         return videos;
     }
 
@@ -153,18 +153,27 @@ public class YouTubeServiceImpl implements YouTubeService{
     }
 
     private void savePlaylistToFile(Playlist playlist, String filePath) {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("id", playlist.getId());
-        JSONArray jsonArray = new JSONArray();
-        for (Video video : playlist.getVideos()) {
-            JSONObject videoObject = new JSONObject();
-            videoObject.put("title", video.getTitle());
-            videoObject.put("description", video.getDescription());
-            videoObject.put("link", video.getLink());
-            jsonArray.put(videoObject);
-        }
-        jsonObject.put("videos", jsonArray);
         try {
+            JSONObject jsonObject;
+            if (Files.exists(Paths.get(filePath))) {
+                String content = new String(Files.readAllBytes(Paths.get(filePath)));
+                jsonObject = new JSONObject(content);
+            } else {
+                jsonObject = new JSONObject();
+                jsonObject.put("id", playlist.getId());
+                jsonObject.put("name", playlist.getName());
+                jsonObject.put("videos", new JSONArray());
+            }
+
+            JSONArray jsonArray = jsonObject.getJSONArray("videos");
+            for (Video video : playlist.getVideos()) {
+                JSONObject videoObject = new JSONObject();
+                videoObject.put("title", video.getTitle());
+                videoObject.put("description", video.getDescription());
+                videoObject.put("link", video.getLink());
+                jsonArray.put(videoObject);
+            }
+
             Files.write(Paths.get(filePath), jsonObject.toString().getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             e.printStackTrace();
@@ -172,20 +181,34 @@ public class YouTubeServiceImpl implements YouTubeService{
     }
 
     private void saveChannelToFile(Channel channel, String filePath) {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("name", channel.getName());
-        JSONArray jsonArray = new JSONArray();
-        for (Video video : channel.getVideos()) {
-            JSONObject videoObject = new JSONObject();
-            videoObject.put("title", video.getTitle());
-            videoObject.put("description", video.getDescription());
-            videoObject.put("link", video.getLink());
-            jsonArray.put(videoObject);
-        }
-        jsonObject.put("videos", jsonArray);
         try {
+            JSONObject jsonObject;
+            if (Files.exists(Paths.get(filePath))) {
+                String content = new String(Files.readAllBytes(Paths.get(filePath)));
+                if (content.isEmpty()) {
+                    jsonObject = new JSONObject();
+                } else {
+                    jsonObject = new JSONObject(content);
+                }
+            } else {
+                jsonObject = new JSONObject();
+                jsonObject.put("name", channel.getName());
+                jsonObject.put("videos", new JSONArray());
+            }
+
+            JSONArray jsonArray = jsonObject.getJSONArray("videos");
+            for (Video video : channel.getVideos()) {
+                JSONObject videoObject = new JSONObject();
+                videoObject.put("title", video.getTitle());
+                videoObject.put("description", video.getDescription());
+                videoObject.put("link", video.getLink());
+                jsonArray.put(videoObject);
+            }
+
             Files.write(Paths.get(filePath), jsonObject.toString().getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
+            e.printStackTrace();
+        } catch (JSONException e) {
             e.printStackTrace();
         }
     }

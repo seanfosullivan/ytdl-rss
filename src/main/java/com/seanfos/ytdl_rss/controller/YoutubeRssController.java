@@ -11,14 +11,24 @@ import org.springframework.web.bind.annotation.RestController;
 
 import org.json.JSONObject;
 import org.json.JSONArray;
+import org.json.JSONException;
+
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.IOException;
+
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 
 @RestController
 public class YoutubeRssController {
+
+    @Value("${data.channel.json.path}")
+    private String channelJsonPath;
+
+    @Value("${data.playlist.json.path}")
+    private String playlistJsonPath;
 
     private final YouTubeServiceImpl youTubeService;
     private final RssFeedService rssFeedService;
@@ -93,11 +103,10 @@ public class YoutubeRssController {
         }
     }
 
+
     @GetMapping(value = "/rssfeed")
     public String generateRssFeed() {
         try {
-            String channelJsonPath = "/home/seanfos/workdir/ytdl-rss/src/main/resources/data/channel.json";
-            String playlistJsonPath = "/home/seanfos/workdir/ytdl-rss/src/main/resources/data/playlist.json";
             return rssFeedService.generateRssFeed(channelJsonPath, playlistJsonPath);
         } catch (Exception e) {
             e.printStackTrace();
@@ -108,8 +117,7 @@ public class YoutubeRssController {
     @GetMapping(value = "/downloadFromChannelJson")
     public String downloadFromChannelJson() {
         try {
-            String filePath = "/home/seanfos/workdir/ytdl-rss/src/main/resources/data/channel.json";
-            youTubeService.downloadVideosFromJson(filePath);
+            youTubeService.downloadVideosFromJson(channelJsonPath);
             return "Videos downloaded from channel JSON file.";
         } catch (Exception e) {
             e.printStackTrace();
@@ -120,41 +128,11 @@ public class YoutubeRssController {
     @GetMapping(value = "/downloadFromPlaylistJson")
     public String downloadFromPlaylistJson() {
         try {
-            String filePath = "/home/seanfos/workdir/ytdl-rss/src/main/resources/data/playlist.json";
-            youTubeService.downloadVideosFromJson(filePath);
+            youTubeService.downloadVideosFromJson(playlistJsonPath);
             return "Videos downloaded from playlist JSON file.";
         } catch (Exception e) {
             e.printStackTrace();
             return "<error>Unable to download videos from playlist JSON file</error>";
-        }
-    }
-
-    @GetMapping(value = "/channelNamesAndPlaylists")
-    public String getChannelNamesAndPlaylists() {
-        try {
-            String channelFilePath = "/home/seanfos/workdir/ytdl-rss/src/main/resources/data/channel.json";
-            String playlistFilePath = "/home/seanfos/workdir/ytdl-rss/src/main/resources/data/playlist.json";
-
-            JSONObject channelJson = new JSONObject(new String(Files.readAllBytes(Paths.get(channelFilePath))));
-            JSONObject playlistJson = new JSONObject(new String(Files.readAllBytes(Paths.get(playlistFilePath))));
-
-            JSONArray channelNames = new JSONArray();
-            channelNames.put(channelJson.getString("name"));
-
-            JSONArray playlistTitles = new JSONArray();
-            JSONArray videos = channelJson.getJSONArray("videos");
-            for (int i = 0; i < videos.length(); i++) {
-                playlistTitles.put(videos.getJSONObject(i).getString("title"));
-            }
-
-            JSONObject result = new JSONObject();
-            result.put("channelNames", channelNames);
-            result.put("playlistTitles", playlistTitles);
-
-            return result.toString();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return "<error>Unable to fetch channel names and playlists</error>";
         }
     }
 

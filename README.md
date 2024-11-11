@@ -1,44 +1,85 @@
-# Introduction
-## Overview
-The basis of this project is to automate the downloading of a YouTube playlist/video/channel and provide it as a video podcast through RSS feed.
-## Structure
-```
-src/main/java/com/example/youtubetorss
-│
-├── controller
-│   └── PlaylistController.java   // REST API to expose RSS feed endpoint
-│
-├── service
-│   └── YouTubeService.java       // Service for fetching data from YouTube API
-│   └── YouTubeServiceImpl.java       
-│   └── RssFeedService.java       // Service to generate RSS feed
-│   └── RssFeedServiceImpl.java       
-│
-├── model
-│   └── Video.java                // Model for video data
-│
-└── config
-    └── AppConfig.java            // Configuration for application properties
-```
-## Goals
-- [x] Retrieve video data from YouTube Playlist ✅ 2024-10-29
-- [ ] Retrieve video data from YouTube video
-- [ ] Retrieve video data from YouTube Channel
-- [ ] Create model for video, playlist and channel
-- [ ] Create storage for YouTube sources
-- [ ] Automate checks for new videos from playlist and channel sources periodically
-- [ ] Provide video as video podcast
-- [ ] Automate video download yt-dlp
-- [ ] Dockerize project
-> [!NOTE] Dockerizing yt-dlp
-> yt-dlp may not be dockerizeable might require script to download, install and integrate or may be separate prerequisite if not possible to integrate
+# YouTube Video Downloader RSS
 
-# Installation
-In resources folder create application.properties file:
-```application.properties
-spring.application.name=ytdl-rss
+This project allows you to download YouTube videos from channels and playlists, and generate RSS feeds for them.
 
-youtube.api.key=<Your API key>
+## Prerequisites
 
-youtube.api.baseUrl=https://www.googleapis.com/youtube/v3/
-```
+- Java 11 or higher
+- Node.js and npm
+- Python 3
+- yt-dlp (YouTube downloader)
+
+## Backend Setup
+
+1. Clone the repository:
+    ```sh
+    git clone https://github.com/yourusername/ytdl-rss.git
+    cd ytdl-rss
+    ```
+
+2. Configure the YouTube API key:
+    - Open `src/main/resources/application.properties`
+    - Replace the value of `youtube.api.key` with your YouTube API key.
+
+3. Build and run the Spring Boot application:
+    ```sh
+    ./mvnw clean install
+    ./mvnw spring-boot:run
+    ```
+
+## Frontend Setup
+
+1. Navigate to the frontend directory:
+    ```sh
+    cd frontend
+    ```
+
+2. Install the dependencies:
+    ```sh
+    npm install
+    ```
+
+3. Start the React development server:
+    ```sh
+    npm start
+    ```
+
+## Usage
+
+- Open your browser and navigate to `http://localhost:3000`
+- Use the interface to download videos from YouTube channels and playlists.
+- Generate RSS feeds for the downloaded videos.
+
+## API Endpoints
+
+### Download Video
+- **GET** `/video?videoId={videoId}`
+- Downloads a single video by its ID.
+
+### Download Playlist Videos
+- **GET** `/playlist?playlistId={playlistId}`
+- Downloads videos from a playlist by its ID.
+
+### Download Channel Videos
+- **GET** `/channel?channelName={channelName}`
+- Downloads videos from a channel by its name.
+
+### Generate RSS Feed
+- **GET** `/rssfeed`
+- Generates an RSS feed for the downloaded videos.
+
+### Download Videos from Channel JSON
+- **GET** `/downloadFromChannelJson`
+- Downloads videos listed in the channel JSON file.
+
+### Download Videos from Playlist JSON
+- **GET** `/downloadFromPlaylistJson`
+- Downloads videos listed in the playlist JSON file.
+
+### Get Channel Names and Playlists
+- **GET** `/channelNamesAndPlaylists`
+- Retrieves channel names and playlist titles from JSON files.
+
+### Update Videos
+- **GET** `/updateVideos`
+- Updates the videos in the JSON files.
