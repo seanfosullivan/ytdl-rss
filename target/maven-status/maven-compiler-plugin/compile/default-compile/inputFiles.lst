@@ -1,9 +1,0 @@
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/YtdlRssApplication.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/config/AppConfig.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/controller/YoutubeRssController.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/model/Video.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/service/FileDeletionService.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/service/RssFeedService.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/service/RssFeedServiceImpl.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/service/YouTubeService.java
-/home/seanfos/workdir/ytdl-rss/src/main/java/com/seanfos/ytdl_rss/service/YouTubeServiceImpl.java
