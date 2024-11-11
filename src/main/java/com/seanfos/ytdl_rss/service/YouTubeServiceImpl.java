@@ -1,6 +1,8 @@
 package com.seanfos.ytdl_rss.service;
 
 import com.seanfos.ytdl_rss.model.Video;
+import com.seanfos.ytdl_rss.model.Channel;
+import com.seanfos.ytdl_rss.model.Playlist;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,12 +11,21 @@ import org.springframework.web.client.RestTemplate;
 
 import org.json.JSONObject;
 import org.json.JSONArray;
+import org.json.JSONTokener;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import java.nio.file.Path;
+import java.util.stream.Collectors;
+import org.springframework.web.client.HttpClientErrorException;
 
 @Service
 public class YouTubeServiceImpl implements YouTubeService{
@@ -65,6 +76,7 @@ public class YouTubeServiceImpl implements YouTubeService{
                 videos.add(video);
             }
         }
+        savePlaylistToFile(new Playlist(playlistId, videos), Paths.get("src", "main", "resources", "data", "playlist.json").toString());
         return videos;
     }
 
@@ -72,7 +84,9 @@ public class YouTubeServiceImpl implements YouTubeService{
     public List<Video> getChannelVideos(String channelName) {
         String channelId = getChannelId(channelName);
         if (channelId != null){
-            return getChannelVideosById(channelId);
+            List<Video> videos = getChannelVideosById(channelId);
+            saveChannelToFile(new Channel(channelName, videos), Paths.get("src", "main", "resources", "data", "channel.json").toString());
+            return videos;
         }
         return List.of();
     }
@@ -104,31 +118,76 @@ public class YouTubeServiceImpl implements YouTubeService{
     @Override
     public List<Video> getChannelVideosById(String channelId) {
         String url = String.format("%ssearch?part=snippet&channelId=%s&maxResults=20&key=%s&order=date", apiUrl, channelId, apiKey);
-        String response = restTemplate.getForObject(url, String.class);
-        List<Video> videos = new ArrayList<>();
-    
-        if (response != null) {
-            JSONObject jsonResponse = new JSONObject(response);
-            JSONArray items = jsonResponse.getJSONArray("items");
-    
-            for (int i = 0; i < items.length(); i++) {
-                JSONObject item = items.getJSONObject(i).getJSONObject("snippet");
-                
-                // Ensure that the item is a video and contains the 'resourceId' field
-                if (items.getJSONObject(i).getJSONObject("id").has("videoId")) {
-                    Video video = new Video();
-                    video.setTitle(item.getString("title"));
-                    video.setDescription(item.getString("description"));
-    
-                    // Get the video link
-                    String videoId = items.getJSONObject(i).getJSONObject("id").getString("videoId");
-                    video.setLink("https://www.youtube.com/watch?v=" + videoId);
-    
-                    videos.add(video);
+        try {
+            System.out.println("Request URL: " + url); // Log the request URL
+            String response = restTemplate.getForObject(url, String.class);
+            System.out.println("Response: " + response); // Log the response
+            List<Video> videos = new ArrayList<>();
+        
+            if (response != null) {
+                JSONObject jsonResponse = new JSONObject(response);
+                JSONArray items = jsonResponse.getJSONArray("items");
+        
+                for (int i = 0; i < items.length() && videos.size() < 10; i++) {
+                    JSONObject item = items.getJSONObject(i).getJSONObject("snippet");
+                    
+                    // Ensure that the item is a video and contains the 'resourceId' field
+                    if (items.getJSONObject(i).getJSONObject("id").has("videoId")) {
+                        Video video = new Video();
+                        video.setTitle(item.getString("title"));
+                        video.setDescription(item.getString("description"));
+        
+                        // Get the video link
+                        String videoId = items.getJSONObject(i).getJSONObject("id").getString("videoId");
+                        video.setLink("https://www.youtube.com/watch?v=" + videoId);
+        
+                        videos.add(video);
+                    }
                 }
             }
+            return videos;
+        } catch (HttpClientErrorException e) {
+            System.err.println("Error fetching channel videos: " + e.getMessage());
+            return List.of();
         }
-        return videos;
+    }
+
+    private void savePlaylistToFile(Playlist playlist, String filePath) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("id", playlist.getId());
+        JSONArray jsonArray = new JSONArray();
+        for (Video video : playlist.getVideos()) {
+            JSONObject videoObject = new JSONObject();
+            videoObject.put("title", video.getTitle());
+            videoObject.put("description", video.getDescription());
+            videoObject.put("link", video.getLink());
+            jsonArray.put(videoObject);
+        }
+        jsonObject.put("videos", jsonArray);
+        try {
+            Files.write(Paths.get(filePath), jsonObject.toString().getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void saveChannelToFile(Channel channel, String filePath) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("name", channel.getName());
+        JSONArray jsonArray = new JSONArray();
+        for (Video video : channel.getVideos()) {
+            JSONObject videoObject = new JSONObject();
+            videoObject.put("title", video.getTitle());
+            videoObject.put("description", video.getDescription());
+            videoObject.put("link", video.getLink());
+            jsonArray.put(videoObject);
+        }
+        jsonObject.put("videos", jsonArray);
+        try {
+            Files.write(Paths.get(filePath), jsonObject.toString().getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public void ytdlpDownloader(Video video) {
@@ -166,6 +225,64 @@ public class YouTubeServiceImpl implements YouTubeService{
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    public void downloadVideosFromJson(String filePath) {
+        try {
+            String content = new String(Files.readAllBytes(Paths.get(filePath)));
+            JSONObject jsonObject = new JSONObject(new JSONTokener(content));
+            JSONArray videos = jsonObject.getJSONArray("videos");
+
+            for (int i = 0; i < videos.length(); i++) {
+                JSONObject videoObject = videos.getJSONObject(i);
+                Video video = new Video();
+                video.setTitle(videoObject.getString("title"));
+                video.setDescription(videoObject.getString("description"));
+                video.setLink(videoObject.getString("link"));
+                ytdlpDownloader(video);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    //@Scheduled(fixedRate = 300000) // 5 minutes in milliseconds
+    public void updatePlaylistAndChannelFiles() {
+        // Get playlist IDs from JSON file
+        String playlistFilePath = Paths.get("src", "main", "resources", "data", "playlist.json").toString();
+        List<String> playlistIds = getIdsFromJsonFile(playlistFilePath, "id");
+
+        // Get channel IDs from JSON file
+        String channelFilePath = Paths.get("src", "main", "resources", "data", "channel.json").toString();
+        List<String> channelIds = getIdsFromJsonFile(channelFilePath, "id");
+
+        // Update playlist JSON files
+        for (String playlistId : playlistIds) {
+            getPlaylistVideos(playlistId);
+        }
+
+        // Update channel JSON files
+        for (String channelId : channelIds) {
+            getChannelVideosById(channelId);
+        }
+    }
+
+    private List<String> getIdsFromJsonFile(String filePath, String key) {
+        try {
+            String content = new String(Files.readAllBytes(Paths.get(filePath)));
+            JSONObject jsonObject = new JSONObject(content);
+            if (jsonObject.has(key) && jsonObject.get(key) instanceof JSONArray) {
+                JSONArray jsonArray = jsonObject.getJSONArray(key);
+                return jsonArray.toList().stream()
+                                .map(Object::toString)
+                                .collect(Collectors.toList());
+            } else if (jsonObject.has(key)) {
+                return List.of(jsonObject.getString(key));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return List.of();
     }
 
 }

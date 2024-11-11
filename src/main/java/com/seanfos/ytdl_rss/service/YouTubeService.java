@@ -40,4 +40,16 @@ public interface YouTubeService {
      * @return List of videos
      */
     public List<Video> getChannelVideosById(String channelId); 
-} 
+
+    /**
+     * Download video using youtube-dl
+     * @param video
+     */
+    public void ytdlpDownloader(Video video);
+
+    /**
+     * Download videos from JSON file
+     * @param filePath
+     */
+    void downloadVideosFromJson(String filePath);
+}
