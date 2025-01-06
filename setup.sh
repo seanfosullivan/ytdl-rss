@@ -29,17 +29,20 @@ pip3 --version
 
 echo "Python installation complete."
 
+# Install java
+echo "Installing OpenJDK 17..."
+sudo apt install -y openjdk-17-jdk
 
 # Download ytdlp
 # Define the download URL and output directory
 DOWNLOAD_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-OUTPUT_DIR="/Downloads"
+OUTPUT_DIR="$HOME/Downloads"
 OUTPUT_FILE="${OUTPUT_DIR}/yt-dlp"
 
 # Create the output directory if it doesn't exist
 if [ ! -d "$OUTPUT_DIR" ]; then
   echo "Creating output directory: $OUTPUT_DIR"
-  mkdir -p "$OUTPUT_DIR"
+  sudo mkdir -p "$OUTPUT_DIR"
 fi
 
 # Use curl to download the file and save it to the output directory
@@ -54,37 +57,3 @@ if [ $? -eq 0 ]; then
 else
   echo "Download failed."
 fi
-
-
-# Install and setup MySQL 
-# Update package list
-echo "Updating package list..."
-sudo apt-get update -y
-
-# Install MySQL Server
-echo "Installing MySQL Server..."
-sudo apt-get install mysql-server -y
-
-# Enable MySQL to start on boot
-echo "Enabling MySQL to start on boot..."
-sudo systemctl enable mysql
-
-# Start MySQL service
-echo "Starting MySQL service..."
-sudo systemctl start mysql
-
-# Wait for MySQL to initialize
-sleep 5
-
-# Set up MySQL root password and create a new database
-echo "Setting up MySQL database..."
-MYSQL_ROOT_PASSWORD="your_root_password"  # Change this to a secure password
-MYSQL_DATABASE="your_database_name"       # Change to your desired database name
-
-# Run the SQL commands to set up the database
-sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE};"
-sudo mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MYSQL_ROOT_PASSWORD}';"
-sudo mysql -u root -e "FLUSH PRIVILEGES;"
-
-# Show success message
-echo "MySQL installed and database '${MYSQL_DATABASE}' created successfully!"
