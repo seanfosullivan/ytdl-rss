@@ -23,8 +23,8 @@ This project allows you to download YouTube videos from channels and playlists, 
 
 3. Build and run the Spring Boot application:
     ```sh
-    ./mvnw clean install
-    ./mvnw spring-boot:run
+    mvn clean install
+    mvn spring-boot:run
     ```
 
 ## Frontend Setup
