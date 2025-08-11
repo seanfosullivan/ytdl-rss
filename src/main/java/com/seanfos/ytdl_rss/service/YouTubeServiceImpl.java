@@ -16,15 +16,25 @@ import org.json.JSONTokener;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import java.util.stream.Collectors;
 import org.springframework.web.client.HttpClientErrorException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class YouTubeServiceImpl implements YouTubeService{
@@ -36,21 +46,55 @@ public class YouTubeServiceImpl implements YouTubeService{
 
     private final RestTemplate restTemplate;
 
+    // Downloader hardening configuration
+    @Value("${downloader.ytdlp.path:/usr/local/bin/yt-dlp}")
+    private String ytdlpPath;
+
+    @Value("${downloader.ytdlp.sha256:}")
+    private String ytdlpSha256; // optional; if set, verify before running
+
+    @Value("${downloader.allowed.hosts:youtube.com,youtu.be}")
+    private String allowedHostsCsv;
+
+    @Value("${downloader.output.dir:${user.home}/videos}")
+    private String outputRootDir;
+
+    @Value("${downloader.concurrency.max:2}")
+    private int maxConcurrentDownloads;
+
+    @Value("${downloader.timeout.seconds:900}")
+    private long downloadTimeoutSeconds;
+
+    private Semaphore downloadSemaphore;
+
     @Autowired
     public YouTubeServiceImpl(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
 
+    @PostConstruct
+    public void initializeSemaphore() {
+        this.downloadSemaphore = new Semaphore(Math.max(1, maxConcurrentDownloads));
+    }
+
     @Override
     public Video getVideoData(String videoId) {
-        String url = String.format("%svideos?part=snippet&videoId=%s&key=%s", apiUrl, videoId, apiKey);
+        String url = String.format("%svideos?part=snippet&id=%s&key=%s", apiUrl, videoId, apiKey);
         String response = restTemplate.getForObject(url, String.class);
-        JSONObject item = new JSONObject(response).getJSONObject("snippet");
+
+        JSONObject json = new JSONObject(response);
+        JSONArray items = json.optJSONArray("items");
+        if (items == null || items.length() == 0) {
+            throw new IllegalArgumentException("Video not found for id=" + videoId);
+        }
+
+        JSONObject item = items.getJSONObject(0);
+        JSONObject snippet = item.getJSONObject("snippet");
 
         Video video = new Video();
-        video.setTitle(item.getString("title"));
-        video.setDescription(item.getString("description"));
-        video.setLink("https://www.youtube.com/watch?v=" + item.getJSONObject("resourceId").getString("videoId"));
+        video.setTitle(snippet.optString("title", videoId));
+        video.setDescription(snippet.optString("description", ""));
+        video.setLink("https://www.youtube.com/watch?v=" + item.getString("id"));
 
         return video;
     }
@@ -214,40 +258,153 @@ public class YouTubeServiceImpl implements YouTubeService{
     }
 
     public void ytdlpDownloader(Video video) {
+        // Validate link host
+        String videoLink = video.getLink();
+        if (!isAllowedHost(videoLink)) {
+            System.err.println("Blocked download: disallowed host in URL " + videoLink);
+            return;
+        }
+
+        // Ensure output directory exists
+        String outputPathTemplate = ensureOutputDir(outputRootDir) + "/%(channel)s/%(title)s.%(ext)s";
+
+        // Verify yt-dlp path and checksum if provided
+        Path ytdlpBinary = Paths.get(ytdlpPath);
+        if (!Files.isRegularFile(ytdlpBinary) || !Files.isExecutable(ytdlpBinary)) {
+            System.err.println("yt-dlp binary not found or not executable at: " + ytdlpPath);
+            return;
+        }
+        if (ytdlpSha256 != null && !ytdlpSha256.isBlank()) {
+            try {
+                String actual = sha256Hex(ytdlpBinary);
+                if (!ytdlpSha256.equalsIgnoreCase(actual)) {
+                    System.err.println("yt-dlp checksum mismatch; refusing to execute. Expected " + ytdlpSha256 + " got " + actual);
+                    return;
+                }
+            } catch (IOException | NoSuchAlgorithmException ex) {
+                System.err.println("Failed to compute checksum for yt-dlp: " + ex.getMessage());
+                return;
+            }
+        }
+
+        // Concurrency limit
+        boolean acquired = false;
         try {
-            // Get the home directory path for the user
-            String userHome = System.getProperty("user.home");
-            
-            // Define the output directory for the downloaded video
-            String outputPath = userHome + "/videos/%(channel)s/%(title)s.%(ext)s";
-            
-            // Get the video URL
-            String videoLink = video.getLink();
+            acquired = downloadSemaphore.tryAcquire(1, TimeUnit.SECONDS);
+            if (!acquired) {
+                System.err.println("Download concurrency limit reached; skipping for now: " + videoLink);
+                return;
+            }
 
-            // Construct the command with proper arguments
-            ProcessBuilder pb = new ProcessBuilder("python3", userHome + "/Downloads/yt-dlp", "-o", outputPath, videoLink);
-
-            // Start the process
+            ProcessBuilder pb = new ProcessBuilder(ytdlpPath, "-o", outputPathTemplate, videoLink);
+            pb.redirectErrorStream(false);
             Process process = pb.start();
 
-            // Read the output from the Python script
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+            // Capture stdout and stderr concurrently
+            StreamCollector stdout = new StreamCollector(process.getInputStream());
+            StreamCollector stderr = new StreamCollector(process.getErrorStream());
+            Thread tOut = new Thread(stdout);
+            Thread tErr = new Thread(stderr);
+            tOut.start();
+            tErr.start();
+
+            boolean finished = process.waitFor(downloadTimeoutSeconds, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                System.err.println("yt-dlp timed out after " + downloadTimeoutSeconds + "s for URL: " + videoLink);
+                return;
             }
 
-            // Wait for the process to complete and check exit status
-            int exitCode = process.waitFor();
-            if (exitCode == 0) {
-                System.out.println("Python script executed successfully.");
+            int exit = process.exitValue();
+            // Ensure collectors finished
+            tOut.join(TimeUnit.SECONDS.toMillis(5));
+            tErr.join(TimeUnit.SECONDS.toMillis(5));
+
+            if (exit != 0) {
+                System.err.println("yt-dlp failed (exit=" + exit + ") for URL: " + videoLink + "\nSTDERR:\n" + stderr.getContent());
             } else {
-                System.out.println("Error: Python script execution failed.");
+                System.out.println("yt-dlp succeeded for URL: " + videoLink + "\nSTDOUT:\n" + stdout.getContent());
             }
 
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            System.err.println("Download interrupted: " + ie.getMessage());
+        } catch (IOException ioe) {
+            System.err.println("Failed to start yt-dlp: " + ioe.getMessage());
+        } finally {
+            if (acquired) {
+                downloadSemaphore.release();
+            }
         }
+    }
+
+    private boolean isAllowedHost(String url) {
+        try {
+            URI uri = new URI(url);
+            String host = uri.getHost();
+            if (host == null) {
+                return false;
+            }
+            List<String> allowed = Arrays.stream(allowedHostsCsv.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+            for (String allowedHost : allowed) {
+                if (host.equalsIgnoreCase(allowedHost) || host.toLowerCase().endsWith("." + allowedHost.toLowerCase())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    private String ensureOutputDir(String rootDir) {
+        try {
+            Path root = Paths.get(rootDir);
+            Files.createDirectories(root);
+            return root.toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot create output directory: " + rootDir, e);
+        }
+    }
+
+    private static class StreamCollector implements Runnable {
+        private final InputStream inputStream;
+        private final StringBuilder buffer = new StringBuilder();
+
+        StreamCollector(InputStream inputStream) { this.inputStream = inputStream; }
+
+        @Override
+        public void run() {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(inputStream))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    buffer.append(line).append(System.lineSeparator());
+                }
+            } catch (IOException ignored) {
+            }
+        }
+
+        public String getContent() { return buffer.toString(); }
+    }
+
+    private static String sha256Hex(Path path) throws IOException, NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream is = Files.newInputStream(path)) {
+            byte[] buf = new byte[8192];
+            int r;
+            while ((r = is.read(buf)) != -1) {
+                digest.update(buf, 0, r);
+            }
+        }
+        byte[] hash = digest.digest();
+        StringBuilder sb = new StringBuilder(hash.length * 2);
+        for (byte b : hash) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     public void downloadVideosFromJson(String filePath) {

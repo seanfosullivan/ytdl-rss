@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  ytdl-rss:
+    build: .
+    image: ytdl-rss:local
+    ports:
+      - "8080:8080"
+    environment:
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - DOWNLOADER_OUTPUT_DIR=/data/videos
+      - DOWNLOADER_YTDLP_PATH=/usr/local/bin/yt-dlp
+      # - DOWNLOADER_YTDLP_SHA256=<optional_sha256>
+      - DOWNLOADER_ALLOWED_HOSTS=youtube.com,youtu.be
+      - DOWNLOADER_CONCURRENCY_MAX=2
+      - DOWNLOADER_TIMEOUT_SECONDS=900
+    volumes:
+      - ./data/videos:/data/videos
+    restart: unless-stopped
+

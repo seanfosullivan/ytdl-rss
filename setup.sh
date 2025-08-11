@@ -1,59 +1,35 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Install Python on a Debian-based system.
-# Update package list and upgrade system packages
-echo "Updating package list..."
-sudo apt update
+# This setup script is now focused on Docker usage.
+# It builds the image and prepares a local data directory for downloads.
 
-# Install prerequisite packages
-echo "Installing prerequisites..."
-sudo apt install -y software-properties-common
+APP_NAME="ytdl-rss"
+IMAGE_TAG="${APP_NAME}:local"
+DATA_DIR="$(pwd)/data/videos"
 
-# Add deadsnakes PPA for more Python versions (optional)
-# Uncomment the next line if you want to install a specific version of Python
-# sudo add-apt-repository ppa:deadsnakes/ppa
+echo "Creating data directory at: ${DATA_DIR}"
+mkdir -p "${DATA_DIR}"
 
-# Install Python 3
-echo "Installing Python 3..."
-sudo apt install -y python3 python3-pip
+echo "Building Docker image: ${IMAGE_TAG}"
+docker build -t "${IMAGE_TAG}" .
 
-# Verify installation
-echo "Python version:"
-python3 --version
+cat <<EOF
 
-echo "Pip version:"
-pip3 --version
+Build complete.
 
-# Optional: Install additional Python packages or tools
-# sudo pip3 install [package-name]
+Run with:
+  export YOUTUBE_API_KEY=your_key_here
+  docker run --rm -p 8080:8080 \
+    -e YOUTUBE_API_KEY=\"$YOUTUBE_API_KEY\" \
+    -e DOWNLOADER_OUTPUT_DIR=/data/videos \
+    -e DOWNLOADER_YTDLP_PATH=/usr/local/bin/yt-dlp \
+    -v ${DATA_DIR}:/data/videos \
+    ${IMAGE_TAG}
 
-echo "Python installation complete."
+Or using docker compose:
+  export YOUTUBE_API_KEY=your_key_here
+  docker compose up --build
 
-# Install java
-echo "Installing OpenJDK 17..."
-sudo apt install -y openjdk-17-jdk
-
-# Download ytdlp
-# Define the download URL and output directory
-DOWNLOAD_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-OUTPUT_DIR="$HOME/Downloads"
-OUTPUT_FILE="${OUTPUT_DIR}/yt-dlp"
-
-# Create the output directory if it doesn't exist
-if [ ! -d "$OUTPUT_DIR" ]; then
-  echo "Creating output directory: $OUTPUT_DIR"
-  sudo mkdir -p "$OUTPUT_DIR"
-fi
-
-# Use curl to download the file and save it to the output directory
-echo "Downloading yt-dlp..."
-curl -L "$DOWNLOAD_URL" -o "$OUTPUT_FILE"
-
-# Check if the download was successful
-if [ $? -eq 0 ]; then
-  echo "Download completed successfully. Saved to $OUTPUT_FILE"
-  # make the file executable
-  chmod +x "$OUTPUT_FILE"
-else
-  echo "Download failed."
-fi
+Note: The application process starts automatically when the container starts; no extra setup is required inside the container.
+EOF

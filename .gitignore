@@ -1,5 +1,4 @@
 src/main/resources/application.properties
 target/
 .vscode/extensions.json
-src/main/resources/
 frontend/node_modules/
